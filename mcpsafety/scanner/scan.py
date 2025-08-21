@@ -1,9 +1,3 @@
-""" 
-   Authors: Brandon Radosevich and John Halloran (johnhalloran321@gmail.com)
-   Copyright (C) Brandon Radosevich and John Halloran
-   Licensed under the Mozilla Public License Version 2.0
-"""
-
 from pyfiglet import figlet_format
 from rich.console import Console
 from argparse import ArgumentParser
@@ -313,6 +307,7 @@ async def run_stdio_mcp_server(server_params: List[StdioServerParameters], serve
         
         # Create a single team to analyze all servers together
         mcp_security_team = Team(
+            model=select_llm(),
             members=[agent, analysis_hacking_agent],
             instructions=[
                     f"You are a security auditor, looking for vulnerabilities in the MCP Server implementation.",
@@ -365,7 +360,6 @@ def get_kb():
             embedder=select_embedder()
         ),
     )
-
 
 def print_banner():
     banner = figlet_format('MCP-XPLORER',"big")

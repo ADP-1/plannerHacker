@@ -8,3 +8,17 @@ This project is a security scanner for MCP (Morpheus Cyber Protector) servers. I
 - Generates a markdown report
 - Configurable scan settings
 
+## 🚀 Running the Project (Current Status)
+
+Right now, the scanner connects manually to an MCP server.  
+Here’s how to run it:
+
+### 1. Start the MCP Server
+In a new terminal, run:
+
+```bash
+npx -y @modelcontextprotocol/server-everything streamableHttp --port 8000
+```
+```bash 
+python mcpsafety/scanner/scan.py --port 8000
+```
