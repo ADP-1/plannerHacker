@@ -36,6 +36,41 @@ MCP_URLS = [
     "https://github.com/redcanaryco/atomic-red-team",
 ]
 
+class NetworkMCPTool:
+    """A tool for interacting with a network-based MCP server."""
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+
+    async def list_available_tools(self) -> str:
+        """
+        Get Available Tools from the MCP Server.
+        """
+        try:
+            async with sse_client(self.base_url) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    tools = await session.list_tools()
+                    items = getattr(tools, "tools", [])
+                    return str(items)
+        except Exception as e:
+            return f"An exception occurred: {e}"
+
+    async def call_a_tool(self, toolName: str, args: dict) -> str:
+        """
+        Call a tool on the MCP Server.
+        Args:
+            toolName (str): Name of tool to call.
+            args (dict): The dictionary of arguments for the tool.
+        """
+        try:
+            async with sse_client(self.base_url) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    resp = await session.call_tool(toolName, args)
+                    return str(resp)
+        except Exception as e:
+            return f"An exception occurred: {e}"
+
 async def get_tools(url : str) -> str:
     """
     Get Available Tools from the MCP Server
@@ -228,6 +263,99 @@ def get_default_config():
     }"""
     return json.loads(config_str)
 
+async def run_network_scan(server_url: str):
+    """Runs a scan against a single, running network MCP server."""
+    mcp_tool = NetworkMCPTool(base_url=server_url)
+
+    agent = Agent(
+        model=select_llm(),
+        tools=[mcp_tool],
+        instructions=dedent("""\
+                You are a security auditor, looking for vulnerabilities in the MCP Server.
+                Ensure that you are thinking like a hacker, with the goal of gaining access, lateral movement, getting callbacks using netcat, dumping credentials such as ssh keys, adding credentials like public ssh keys to authorized keys etc.
+                You are given a list of tools, prompts, and resources that are available on the MCP Server.
+                You are given a list of directories that you can access on the MCP Server.
+                You are given a list of files that you can access on the MCP Server.
+                You are given a list of commands that you can use to access the MCP Server.
+                You are given a list of prompts that you can use to access the MCP Server.
+                You are given a list of resources that you can use to access the MCP Server.
+                Please try to keep commands and tools to smaller directories, to not explode the token limit
+        """),
+        markdown=True,
+        goal=dedent("""\
+            You are looking for vulnerabilities in the MCP Server.
+                Given only the list of tools, prompts, and resources, provide easy to understand examples of each vulnerability, and how you would exploit them with basic shell and unix tools.
+                Provide easy to understand examples of each vulnerability, and how to exploit them with basic shell and unix tools.
+                Provide a command-line example for each vulnerability.
+                Provide a remediation command for each vulnerability.
+                Provide a source citation for each vulnerability.
+                Provide a source citation for each remediation command.
+                Provide a source citation for each command-line example.
+        """),
+        show_tool_calls=True,
+        telemetry=False,
+        debug_mode=True,
+        resolve_context=True,
+    )
+
+    analysis_hacking_agent = Agent(
+        model=select_llm(),
+        tools=[DuckDuckGoTools(), ArxivTools(), HackerNewsTools()],
+        markdown=True,
+        instructions=dedent("""\
+            You are a security auditor, looking for vulnerabilities in the MCP Server.
+            For each (tool, prompt, resource) determine how you would exploit them with basic shell and unix tools.
+            Provide a command-line example for each vulnerability.
+            Provide a remediation command for each vulnerability.
+            Provide a source citation for each vulnerability.
+            Provide a source citation for each remediation command.
+            Provide a source citation for each command-line example.
+            Utilize DuckDuckGo, Arxiv, and Hacker News to research the vulnerabilities and provide source citations.
+        """),
+        goal=dedent("""\
+                For each (tool, prompt, resource) determine how you would exploit them with basic shell and unix tools.
+                Provide a command-line example for each vulnerability.
+                Provide a remediation command for each vulnerability.
+                Provide a source citation for each vulnerability.
+                Provide a source citation for each remediation command.
+                Provide a source citation for each command-line example.
+                List the (tool, prompt, resource) that you are using to exploit the vulnerability.
+        """),
+        show_tool_calls=True,
+        telemetry=False,
+        debug_mode=True,
+        resolve_context=True,
+    )
+
+    mcp_security_team = Team(
+        model=select_llm(),
+        members=[agent, analysis_hacking_agent],
+        instructions=[
+            f"You are a security auditor, looking for vulnerabilities in the MCP Server implementation.",
+            "The vulnerabilities should be directly based on the how the MCP Server utilizes its implemented (tools, prompts, and resources), and then you should consider how a hacker might abuse these tools to gain access, dump credentials, add backdoors to startup scripts, add their own ssh keys in etc.",
+            "Ensure that you are thinking like a hacker, with the goal of gaining access, lateral movement, getting callbacks using netcat, dumping credentials such as ssh keys, adding credentials like public ssh keys to authorized keys etc.",
+            "You are given a list of tools, prompts, and resources that are available on the MCP Server.",
+            "You are given a list of directories that you can access on the MCP Server.",
+            "For each attack show a concrete of example, like modifying bashrc, adding a public key to authorized_keys, adding a backdoor to a startup script, etc."
+        ],
+        description="Network MCP Security Team",
+        mode="collaborate",
+        success_criteria="The team has done an exhaustive search and identified all vulnerabilities arising from the MCP Server(s) interactions, an example of how the attacker would use that tool, resource, prompt for some nefarious reason, and provided remediation steps.",
+        markdown=True,
+        add_datetime_to_instructions=True,
+        enable_agentic_context=True,
+        enable_team_history=True,
+        telemetry=False,
+        debug_mode=True,
+    )
+
+    console.print("\n[bold blue]Starting network MCP vulnerability analysis[/bold blue]")
+    prompt = "Use each member of the team to analyze the MCP Server, and then provide a report of the findings."
+    data = await mcp_security_team.aprint_response(prompt, stream=True, markdown=True)
+    print(data)
+    console.print("[bold green]Completed network analysis[/bold green]\n")
+
+
 async def run_stdio_mcp_server(server_params: List[StdioServerParameters], server_url: str = "http://localhost:8000/sse") -> str:
     """
     Run commands with stdio and return the output for multiple MCP servers.
@@ -402,33 +530,33 @@ async def main():
         kb=get_kb()
         kb.load(recreate=args.recreate_kb)
     
-    # Load configuration
-    if args.config:
-        console.print(f"Loading configuration from {args.config}")
-        config_dict = load_config_from_file(args.config)
+    if args.port:
+        # If a port is specified, run in network mode against a single server.
+        await run_network_scan(args.server)
     else:
-        console.print("Using default configuration")
-        config_dict = get_default_config()
-    
-    # Filter servers if specified
-    if args.servers:
-        filtered_servers = {k: v for k, v in config_dict["mcpServers"].items() if k in args.servers}
-        if not filtered_servers:
-            console.print("[red]Error: No matching servers found in configuration[/red]")
+        # Otherwise, run in stdio mode using a config file.
+        if args.config:
+            console.print(f"Loading configuration from {args.config}")
+            config_dict = load_config_from_file(args.config)
+        else:
+            console.print("Using default configuration")
+            config_dict = get_default_config()
+        
+        if args.servers:
+            filtered_servers = {k: v for k, v in config_dict["mcpServers"].items() if k in args.servers}
+            if not filtered_servers:
+                console.print("[red]Error: No matching servers found in configuration[/red]")
+                exit(1)
+            config_dict["mcpServers"] = filtered_servers
+        
+        server_params = parse_mcp_config(config_dict)
+        
+        if not server_params:
+            console.print("[red]Error: No MCP servers configured[/red]")
             exit(1)
-        config_dict["mcpServers"] = filtered_servers
-    
-    # Pass the dictionary to parse_mcp_config
-    server_params = parse_mcp_config(config_dict)
-    
-    if not server_params:
-        console.print("[red]Error: No MCP servers configured[/red]")
-        exit(1)
-    
-    console.print(f"Scanning {len(server_params)} MCP servers...")
-    
-    # Pass args.server to run_stdio_mcp_server
-    await run_stdio_mcp_server(server_params, args.server)
+        
+        console.print(f"Scanning {len(server_params)} MCP servers...")
+        await run_stdio_mcp_server(server_params, args.server)
 
 if __name__ == "__main__":
     asyncio.run(
