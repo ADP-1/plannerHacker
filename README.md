@@ -13,12 +13,17 @@ This project is a security scanner for MCP (Morpheus Cyber Protector) servers. I
 Right now, the scanner connects manually to an MCP server.  
 Here’s how to run it:
 
-### 1. Start the MCP Server
-In a new terminal, run:
-
+Open Terminal A (server):
 ```bash
-npx -y @modelcontextprotocol/server-everything streamableHttp --port 8000
+# start an HTTP/SSE MCP server (server-everything streamableHttp)
+npx -y @modelcontextprotocol/server-everything streamableHttp --port 3001
+# Expect: "MCP Streamable HTTP Server listening on port 3001"
 ```
-```bash 
-python mcpsafety/scanner/scan.py --port 8000
+
+
+Open Terminal B (scanner, with your .venv active):
+
+``` bash
+python mcpsafety/scanner/scan.py --port 3001
+```
 ```

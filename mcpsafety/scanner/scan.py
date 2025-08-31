@@ -113,7 +113,7 @@ def select_embedder():
         except ImportError:
             console.print(":x: openai package not installed")
             exit(1)
-        
+
 def select_llm():
     """
     Looks at environment configs to determine what LLM to use. 
@@ -134,6 +134,14 @@ def select_llm():
         )
         print(llm)
         return llm
+    elif getenv("GOOGLE_API_KEY"):
+        try:
+            from agno.models.google.gemini import Gemini
+            console.print("[green]Using Google Gemini model.[/green]")
+            return Gemini(id="gemini-2.5-flash", api_key=getenv("GOOGLE_API_KEY"))
+        except ImportError:
+            console.print(":x: `google-generativeai` is not installed. Please run `pip install google-generativeai`")
+            exit(1)
     elif getenv("OLLAMA_MODEL"):
         model_id = getenv("OLLAMA_MODEL")
         from agno.models.ollama import Ollama
@@ -350,7 +358,7 @@ async def run_network_scan(server_url: str):
     )
 
     console.print("\n[bold blue]Starting network MCP vulnerability analysis[/bold blue]")
-    prompt = "Use each member of the team to analyze the MCP Server, and then provide a report of the findings."
+    prompt = "First, use all team members to analyze the MCP server's tools and vulnerabilities. After you have gathered all information from the team members, synthesize their findings into a single, final, comprehensive markdown report. The report should detail all discovered vulnerabilities, provide concrete examples of exploits, and suggest clear remediation steps."
     data = await mcp_security_team.aprint_response(prompt, stream=True, markdown=True)
     print(data)
     console.print("[bold green]Completed network analysis[/bold green]\n")
@@ -458,7 +466,7 @@ async def run_stdio_mcp_server(server_params: List[StdioServerParameters], serve
         
         # Run the analysis
         console.print("\n[bold blue]Starting multi-server MCP vulnerability analysis[/bold blue]")
-        prompt = "Use each member of the team to analyze the MCP Server, and then provide a report of the findings."
+        prompt = "First, use all team members to analyze the MCP server's tools and vulnerabilities. After you have gathered all information from the team members, synthesize their findings into a single, final, comprehensive markdown report. The report should detail all discovered vulnerabilities, provide concrete examples of exploits, and suggest clear remediation steps."
         data = await mcp_security_team.aprint_response(prompt, stream=True,markdown=True)
         print(data)
         console.print("[bold green]Completed multi-server analysis[/bold green]\n")
@@ -490,7 +498,7 @@ def get_kb():
     )
 
 def print_banner():
-    banner = figlet_format('MCP-XPLORER',"big")
+    banner = figlet_format('MCPXPLORER',"big")
     console.print(banner, justify="center")
     console.print(f"Version: {VERSION}",justify="center")
 
