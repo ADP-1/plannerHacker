@@ -3,11 +3,10 @@ requires      = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mcpsafety"
+name = "plannerHacker"
 version = "0.0.1"
 authors = [
-    { name = "Brandon Radosevich"},
-    { name = "John Halloran", email="johnhalloran321@gmail.com" },
+    { name = "Aditya Pandey"}, email="@gmail.com" },
 
 ]
 license = { file = "LICENSE" }
